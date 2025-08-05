@@ -1,69 +1,75 @@
-# Space Engineers Client Plugin Template
+# Phyzix - Space Engineers Entity Streaming Optimizer
 
-[Server/Client version of the template](https://github.com/sepluginloader/PluginTemplate)
+Eliminates freezing and stuttering when loading entities (asteroids, grids, etc.) in Space Engineers.
 
-## Prerequisites
+## ⚠️ Early Release Notice
+This plugin is newly released. While it's been tested and works well (on my machine ...), please report any issues you encounter.
 
-- [Space Engineers](https://store.steampowered.com/app/244850/Space_Engineers/)
-- [Python 3.x](https://python.org) (tested with 3.9)
-- [Plugin Loader](https://github.com/sepluginloader/PluginLoader/)
-- [.NET Framework 4.8.1 Developer Pack](https://dotnet.microsoft.com/en-us/download/dotnet-framework/net481)
+## Overview
 
-## Create your plugin project
+Phyzix solves a common Space Engineers performance issue where the game freezes when loading multiple entities simultaneously. This is especially noticeable on servers that dynamically spawn asteroids or use heavy spawn systems.
 
-1. Click on **Use this template** (top right corner on GitHub) and follow the wizard to create your repository
-2. Clone your repository to have a local working copy
-3. Run `setup.py`, enter the name of your plugin project in `CapitalizedWords` format
-4. Let `setup.py` auto-detect your install location or fill it in manually
-5. Open the solution in Visual Studio or Rider
-6. Make a test build, the plugin's DLL should be deployed (see the build log for the path)
-7. Test that the empty plugin can be enabled in Plugin Loader
-8. Replace the contents of this file with the description of your plugin
-9. Follow the TODO comments in the source code
+### The Problem
+When Space Engineers loads many entities at once (like 50+ asteroids), it processes them all in a single frame, causing:
+- Multi-second freezes
+- Input lag and stuttering  
+- FPS drops to single digits
+- Unresponsive controls
 
-## Remarks
+### How Phyzix Solves It
+Instead of processing all entities in one frame, Phyzix:
+- Spreads the load across multiple frames (default: 5 entities per frame)
+- Defers physics creation until after validation
+- Prioritizes important entities (spawn points, nearby objects)
+- Removes invalid entities before they impact performance
 
-### Plugin configuration
+Result: Smooth, consistent framerate even during heavy entity streaming.
 
-You can have a nice configuration dialog with little effort in the game client.
-Customize the `Config` class in the `ClientPlugin` project, just follow the examples.
-It supports many different data types, including key binding. Once you have more
-options than can fit on the screen the dialog will have a vertical scrollbar.
+## Installation
 
-![Example config dialog](Doc/ConfigDialogExample.png "Example config dialog")
+1. Enable via your choice of plugin loader.
+2. Configure if needed (defaults work well)
 
-### Debugging
 
-- Always use a debug build if you want to set breakpoints and see variable values.
-- A debug build defines `DEBUG`, so you can add conditional code in `#if DEBUG` blocks.
-- While debugging a specific target unload the other two. It prevents the IDE to be confused.
-- If breakpoints do not "stick" or do not work, then make sure that:
-  - Other projects are unloaded, only the debugged one and Shared are loaded.
-  - Debugger is attached to the running process.
-  - You are debugging the code which is running (no code changes made since the build).
+## Configuration
 
-### Troubleshooting
+Access through Plugin Loader's config menu:
 
-- If the IDE looks confused, then restarting it and the debugged game usually works.
-- If the restart did not work, then try to delete caches used by your IDE and restart.
-- If your build cannot deploy (just runs in a loop), then something locks the DLL file.
-- Look for running game processes (maybe stuck running in the background) and kill them.
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Entity Batch Size | 5 | Entities processed per frame. Lower = smoother, higher = faster loading |
+| Validation Timeout | 5000ms | How long to wait for server validation |
+| Defer Voxel Physics | ON | Delays asteroid physics creation |
+| Enable Distance Priority | ON | Loads closer entities first |
 
-### Release
+Most users won't need to change these settings.
 
-- Always make your final release from a RELEASE build. (More optimized, removes debug code.)
-- Always test your RELEASE build before publishing. Sometimes is behaves differently.
-- In case of client plugins the Plugin Loader compiles your code, watch out for differences.
+## Compatibility
 
-### Communication
+- **Multiplayer:** Yes (client-side only)
+- **Servers:** Works on any server
+- **Other Mods:** Generally compatible
+- **Game Version:** Latest Space Engineers
 
-- In your documentation always include how players or server admins should report bugs.
-- Try to be reachable and respond on a timely manner over your communication channels.
-- Be open for constructive critics.
+## Known Limitations
 
-### Abandoning your project
+- Only optimizes entity streaming, not general game performance
+- Some heavily modded servers may require config adjustments
+- Initial entity discovery still happens normally
 
-- Always consider finding a new maintainer, ask around at least once.
-- If you ever abandon the project, then make it clear on its GitHub page.
-- Abandoned projects should be made hidden on PluginHub and Torch's plugin list.
-- Keep the code available on GitHub, so it can be forked and continued by others.
+## Technical Details
+
+Phyzix uses Harmony to patch:
+- `RequestReplicable` - Intercepts and queues entity requests
+- `MyVoxelMap.Init` - Defers physics for asteroids
+- `MyEntities.CreateFromObjectBuilder` - Manages entity creation
+
+The plugin maintains separate queues for different priority levels and processes them based on distance and importance.
+
+## Bug Reports
+
+Please create issues in the github repo.
+
+---
+
+*This is an early release. Your feedback helps improve the plugin for everyone.*

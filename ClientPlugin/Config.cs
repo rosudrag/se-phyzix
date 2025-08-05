@@ -8,112 +8,123 @@ using System.Text;
 using VRage.Input;
 using VRageMath;
 
-
 namespace ClientPlugin
 {
-    public enum ExampleEnum
-    {
-        FirstAlpha,
-        SecondBeta,
-        ThirdGamma,
-        AndTheDelta,
-        Epsilon
-    }
-
     public class Config : INotifyPropertyChanged
     {
         #region Options
 
-        // TODO: Define your configuration options and their default values
-        private bool toggle = true;
-        private int integer = 2;
-        private float number = 0.1f;
-        private string text = "Default Text";
-        private ExampleEnum dropdown = ExampleEnum.FirstAlpha;
-        private Color color = Color.Cyan;
-        private Color colorWithAlpha = new Color(0.8f, 0.6f, 0.2f, 0.5f);
-        private Binding keybind = new Binding(MyKeys.None);
+        // General Settings
+        private bool enabled = true;
+        private bool debug = false;
+
+        // Performance Settings
+        private int entityBatchSize = 5;
+        private int validationTimeoutMs = 2000;
+        private int maxConcurrentValidations = 10;
+        private bool deferVoxelPhysics = true;
+        private bool enableDistancePriority = true;
+        private float priorityDistanceThreshold = 5000f;
+
+        // Debug Settings
+        private bool showStreamingDebugInfo = false;
+        private bool logEntityStreaming = false;
 
         #endregion
 
         #region User interface
 
-        // TODO: Settings dialog title
-        public readonly string Title = "Config Demo";
+        public readonly string Title = "Phyzix - Entity Streaming Optimizer";
 
-        // TODO: Settings dialog controls, one property for each configuration option
-
-        [Checkbox(description: "Checkbox Tooltip")]
-        public bool Toggle
+        // General Settings
+        [Checkbox(description: "Enable the entity streaming optimization")]
+        public bool Enabled
         {
-            get => toggle;
-            set => SetField(ref toggle, value);
+            get => enabled;
+            set => SetField(ref enabled, value);
         }
 
-        [Slider(-1f, 10f, 1f, SliderAttribute.SliderType.Integer, description: "Integer Slider Tooltip")]
-        public int Integer
+        [Checkbox(description: "Enable general debug output")]
+        public bool Debug
         {
-            get => integer;
-            set => SetField(ref integer, value);
+            get => debug;
+            set => SetField(ref debug, value);
         }
 
-        [Slider(-5f, 4.5f, 0.5f, SliderAttribute.SliderType.Float, description: "Float Slider Tooltip")]
-        public float Number
+        // Performance Settings
+        [Slider(1f, 20f, 1f, SliderAttribute.SliderType.Integer, description: "Maximum entities to process per frame")]
+        public int EntityBatchSize
         {
-            get => number;
-            set => SetField(ref number, value);
+            get => entityBatchSize;
+            set => SetField(ref entityBatchSize, value);
         }
 
-        [Textbox(description: "Textbox Tooltip")]
-        public string Text
+        [Slider(500f, 5000f, 100f, SliderAttribute.SliderType.Integer, description: "Timeout for entity validation in milliseconds")]
+        public int ValidationTimeoutMs
         {
-            get => text;
-            set => SetField(ref text, value);
+            get => validationTimeoutMs;
+            set => SetField(ref validationTimeoutMs, value);
         }
 
-        [Dropdown(description: "Dropdown Tooltip")]
-        public ExampleEnum Dropdown
+        [Slider(1f, 50f, 1f, SliderAttribute.SliderType.Integer, description: "Maximum concurrent entity validations")]
+        public int MaxConcurrentValidations
         {
-            get => dropdown;
-            set => SetField(ref dropdown, value);
+            get => maxConcurrentValidations;
+            set => SetField(ref maxConcurrentValidations, value);
         }
 
-        [Color(description: "RGB color")]
-        public Color Color
+        [Checkbox(description: "Defer physics creation for voxels until validated")]
+        public bool DeferVoxelPhysics
         {
-            get => color;
-            set => SetField(ref color, value);
+            get => deferVoxelPhysics;
+            set => SetField(ref deferVoxelPhysics, value);
         }
 
-        [Color(hasAlpha: true, description: "RGBA color")]
-        public Color ColorWithAlpha
+        [Checkbox(description: "Prioritize entities by distance to player")]
+        public bool EnableDistancePriority
         {
-            get => colorWithAlpha;
-            set => SetField(ref colorWithAlpha, value);
+            get => enableDistancePriority;
+            set => SetField(ref enableDistancePriority, value);
         }
 
-        [Keybind(description: "Keybind Tooltip - Unbind by right clicking the button")]
-        public Binding Keybind
+        [Slider(1000f, 50000f, 1000f, SliderAttribute.SliderType.Float, description: "Distance threshold for priority loading (meters)")]
+        public float PriorityDistanceThreshold
         {
-            get => keybind;
-            set => SetField(ref keybind, value);
+            get => priorityDistanceThreshold;
+            set => SetField(ref priorityDistanceThreshold, value);
         }
 
-        [Button(description: "Button Tooltip")]
-        public void Button()
+        // Debug Settings
+        [Checkbox(description: "Show streaming debug overlay")]
+        public bool ShowStreamingDebugInfo
         {
+            get => showStreamingDebugInfo;
+            set => SetField(ref showStreamingDebugInfo, value);
+        }
+
+        [Checkbox(description: "Log entity streaming operations to game log")]
+        public bool LogEntityStreaming
+        {
+            get => logEntityStreaming;
+            set => SetField(ref logEntityStreaming, value);
+        }
+
+        [Button(description: "Clear all entity queues and reset state")]
+        public void ClearQueues()
+        {
+            Plugin.Instance?.ClearAllQueues();
             MyGuiSandbox.AddScreen(MyGuiSandbox.CreateMessageBox(
                 MyMessageBoxStyleEnum.Info,
                 buttonType: MyMessageBoxButtonsType.OK,
-                messageText: new StringBuilder("You clicked me!"),
-                messageCaption: new StringBuilder("Custom Button Function"),
-                size: new Vector2(0.6f, 0.5f)
+                messageText: new StringBuilder("All entity queues have been cleared."),
+                messageCaption: new StringBuilder("Queues Cleared"),
+                size: new Vector2(0.5f, 0.3f)
             ));
         }
 
         #endregion
 
-        #region Property change notification bilerplate
+        #region Property change notification boilerplate
 
         public static readonly Config Default = new Config();
         public static readonly Config Current = ConfigStorage.Load();

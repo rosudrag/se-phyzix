@@ -46,7 +46,7 @@ namespace ClientPlugin.Settings
         {
             Attributes = ExtractAttributes();
             Name = Config.Current.Title;
-            ActiveLayout = new Layouts.None(()=>Controls);
+            ActiveLayout = new None(()=>Controls);
             Dialog = new SettingsScreen(Name, OnRecreateControls, size: ActiveLayout.SettingsPanelSize);
         }
 
