@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using Sandbox.Engine.Voxels;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using Sandbox.Game.Entities;
-using Sandbox.Game.World;
-using VRage.Game.Entity;
-using VRage.Game.Voxels;
+using MyEntities = Sandbox.Game.Entities.MyEntities;
 using VRage.ModAPI;
 using VRage.Utils;
-using VRage.Voxels;
 using VRageMath;
 
 namespace ClientPlugin.Services
@@ -16,15 +14,71 @@ namespace ClientPlugin.Services
     public class VoxelPhysicsOptimizer
     {
         private readonly ConcurrentDictionary<long, DeferredPhysicsData> _deferredPhysics = new ConcurrentDictionary<long, DeferredPhysicsData>();
+        private readonly ConcurrentQueue<long> _physicsCreationQueue = new ConcurrentQueue<long>();
         private readonly Config _config;
-        private readonly EntityValidationQueue _validationQueue;
+        private CancellationTokenSource _cancellationTokenSource;
+        private Task _processingTask;
+        private DateTime _lastPhysicsCreation = DateTime.MinValue;
+        
+        private static readonly MethodInfo _createVoxelPhysicsMethod = typeof(MyVoxelBase).GetMethod("CreateVoxelPhysics", 
+            BindingFlags.NonPublic | BindingFlags.Instance);
         
         public int DeferredPhysicsCount => _deferredPhysics.Count;
 
-        public VoxelPhysicsOptimizer(Config config, EntityValidationQueue validationQueue)
+        public VoxelPhysicsOptimizer(Config config)
         {
             _config = config;
-            _validationQueue = validationQueue;
+            StartProcessing();
+        }
+
+        private void StartProcessing()
+        {
+            _cancellationTokenSource = new CancellationTokenSource();
+            _processingTask = Task.Run(async () => await ProcessPhysicsQueueAsync(_cancellationTokenSource.Token));
+        }
+
+        private async Task ProcessPhysicsQueueAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (_physicsCreationQueue.TryDequeue(out var entityId))
+                    {
+                        // Check if entity is still in deferred list (not removed by server)
+                        if (!_deferredPhysics.ContainsKey(entityId))
+                        {
+                            LogDebug($"Skipping physics creation for removed entity {entityId}");
+                            continue;
+                        }
+                        
+                        // Ensure minimum delay between physics creations
+                        var timeSinceLastCreation = (DateTime.UtcNow - _lastPhysicsCreation).TotalMilliseconds;
+                        var remainingDelay = _config.VoxelPhysicsDelayMs - timeSinceLastCreation;
+                        
+                        if (remainingDelay > 0)
+                        {
+                            await Task.Delay((int)remainingDelay, cancellationToken);
+                        }
+
+                        // Double-check entity is still valid before creating physics
+                        if (_deferredPhysics.ContainsKey(entityId))
+                        {
+                            CreatePhysicsForValidatedEntity(entityId);
+                            _lastPhysicsCreation = DateTime.UtcNow;
+                        }
+                    }
+                    else
+                    {
+                        // No items in queue, wait a bit before checking again
+                        await Task.Delay(100, cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug($"Error in physics processing queue: {ex.Message}");
+                }
+            }
         }
 
         public bool ShouldDeferPhysics(MyVoxelBase voxelBase)
@@ -66,24 +120,38 @@ namespace ClientPlugin.Services
             {
                 LogDebug($"Deferred physics for voxel {voxelBase.EntityId} ({voxelBase.StorageName})");
                 
-                // Add to validation queue
-                _validationQueue.QueueForValidation(voxelBase.EntityId, ValidationType.Asteroid);
+                // Add to queue for sequential processing with delays
+                _physicsCreationQueue.Enqueue(voxelBase.EntityId);
             }
         }
 
-        public void CreatePhysicsForValidatedEntity(long entityId)
+        private void CreatePhysicsForValidatedEntity(long entityId)
         {
             if (!_deferredPhysics.TryRemove(entityId, out var data))
                 return;
 
             if (data.VoxelBase == null || data.VoxelBase.Closed)
+            {
+                LogDebug($"Entity {entityId} was closed before physics creation");
                 return;
+            }
+            
+            // Final check - ensure entity still exists in world
+            var entity = MyEntities.GetEntityById(entityId);
+            if (entity == null || entity.Closed)
+            {
+                LogDebug($"Entity {entityId} no longer exists in world, skipping physics creation");
+                return;
+            }
 
             try
             {
                 // Create physics for the voxel
                 CreateVoxelPhysics(data.VoxelBase);
                 LogDebug($"Created physics for validated voxel {entityId}");
+                
+                // Notify entity streaming manager
+                Plugin.Instance?.EntityStreamingManager?.OnEntityCreated(entityId);
             }
             catch (Exception ex)
             {
@@ -93,20 +161,23 @@ namespace ClientPlugin.Services
 
         public void RemoveInvalidEntity(long entityId)
         {
+            // Remove from deferred physics immediately to prevent creation
             if (!_deferredPhysics.TryRemove(entityId, out var data))
                 return;
 
+            LogDebug($"Removed entity {entityId} from physics queue due to server request");
+            
             if (data.VoxelBase != null && !data.VoxelBase.Closed)
             {
                 try
                 {
                     // Close the entity without creating physics
                     data.VoxelBase.Close();
-                    LogDebug($"Removed invalid voxel {entityId}");
+                    LogDebug($"Closed invalid voxel {entityId}");
                 }
                 catch (Exception ex)
                 {
-                    LogDebug($"Failed to remove invalid voxel {entityId}: {ex.Message}");
+                    LogDebug($"Failed to close invalid voxel {entityId}: {ex.Message}");
                 }
             }
         }
@@ -140,13 +211,10 @@ namespace ClientPlugin.Services
                 // For MyVoxelMap (asteroids), we need to trigger physics creation
                 if (voxelBase is MyVoxelMap voxelMap)
                 {
-                    // Use reflection to call the protected CreateVoxelPhysics method
-                    var createPhysicsMethod = typeof(MyVoxelBase).GetMethod("CreateVoxelPhysics", 
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    if (createPhysicsMethod != null)
+                    // Use cached method to avoid reflection overhead
+                    if (_createVoxelPhysicsMethod != null)
                     {
-                        createPhysicsMethod.Invoke(voxelMap, null);
+                        _createVoxelPhysicsMethod.Invoke(voxelMap, null);
                         LogDebug($"Created physics for asteroid {voxelMap.StorageName}");
                     }
                     else
@@ -174,11 +242,22 @@ namespace ClientPlugin.Services
 
         public void Clear()
         {
+            // Stop processing
+            _cancellationTokenSource?.Cancel();
+            try
+            {
+                _processingTask?.Wait(1000);
+            }
+            catch { }
+            
             foreach (var kvp in _deferredPhysics)
             {
                 RemoveInvalidEntity(kvp.Key);
             }
             _deferredPhysics.Clear();
+            
+            // Clear the queue
+            while (_physicsCreationQueue.TryDequeue(out _)) { }
         }
 
         private void LogDebug(string message)
@@ -189,7 +268,7 @@ namespace ClientPlugin.Services
             }
         }
 
-        public class DeferredPhysicsData
+        private class DeferredPhysicsData
         {
             public long EntityId { get; set; }
             public Vector3D Position { get; set; }

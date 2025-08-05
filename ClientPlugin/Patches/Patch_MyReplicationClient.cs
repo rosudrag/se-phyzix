@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using ClientPlugin.Services;
 using HarmonyLib;
-using Sandbox.Engine.Multiplayer;
-using Sandbox.Game.World;
 using VRage.Network;
 using VRage.Utils;
 using Sandbox.Game.Entities;
@@ -29,9 +27,14 @@ namespace ClientPlugin.Patches
 
             try
             {
-                // Only intercept entity loading requests (add = true)
+                // Handle entity removal requests
                 if (!add)
-                    return true;
+                {
+                    // Server is telling us to remove this entity
+                    Plugin.Instance?.VoxelPhysicsOptimizer?.RemoveInvalidEntity(entityId);
+                    LogDebug($"Server requested removal of entity {entityId}");
+                    return true; // Continue with original removal
+                }
 
                 // CRITICAL: Never intercept medical spawn requests
                 if (medicalRoomId != 0)

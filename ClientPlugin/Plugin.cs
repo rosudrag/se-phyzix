@@ -4,7 +4,6 @@ using ClientPlugin.Services;
 using ClientPlugin.Settings;
 using ClientPlugin.Settings.Layouts;
 using HarmonyLib;
-using Sandbox.Game.World;
 using Sandbox.Graphics.GUI;
 using VRage.Plugins;
 using VRage.Utils;
@@ -21,7 +20,6 @@ namespace ClientPlugin
         // Services
         public EntityStreamingManager EntityStreamingManager { get; private set; }
         public VoxelPhysicsOptimizer VoxelPhysicsOptimizer { get; private set; }
-        public EntityValidationQueue EntityValidationQueue { get; private set; }
         
         // Configuration
         public Config Config => Config.Current;
@@ -44,40 +42,15 @@ namespace ClientPlugin
 
         private void InitializeServices()
         {
-            // Initialize validation queue first as others depend on it
-            EntityValidationQueue = new EntityValidationQueue(Config);
-            
-            // Initialize other services
+            // Initialize services
             EntityStreamingManager = new EntityStreamingManager(Config);
-            VoxelPhysicsOptimizer = new VoxelPhysicsOptimizer(Config, EntityValidationQueue);
-
-            // Hook up validation events
-            EntityValidationQueue.OnValidationComplete += OnValidationComplete;
+            VoxelPhysicsOptimizer = new VoxelPhysicsOptimizer(Config);
         }
 
-        private void OnValidationComplete(long entityId, ValidationResult result)
-        {
-            switch (result)
-            {
-                case ValidationResult.Valid:
-                    VoxelPhysicsOptimizer.CreatePhysicsForValidatedEntity(entityId);
-                    break;
-                case ValidationResult.Invalid:
-                    VoxelPhysicsOptimizer.RemoveInvalidEntity(entityId);
-                    break;
-                case ValidationResult.Timeout:
-                    // On timeout, create physics anyway to avoid issues
-                    VoxelPhysicsOptimizer.CreatePhysicsForValidatedEntity(entityId);
-                    break;
-            }
-            
-            EntityStreamingManager.OnEntityCreated(entityId);
-        }
 
         public void Dispose()
         {
             // Clean up services
-            EntityValidationQueue?.Dispose();
             VoxelPhysicsOptimizer?.Clear();
             EntityStreamingManager?.ClearQueue();
 
@@ -113,7 +86,6 @@ namespace ClientPlugin
         {
             EntityStreamingManager?.ClearQueue();
             VoxelPhysicsOptimizer?.Clear();
-            EntityValidationQueue?.Clear();
             LogInfo("All queues cleared");
         }
 
@@ -123,12 +95,11 @@ namespace ClientPlugin
             var queuedEntities = EntityStreamingManager?.QueuedEntities ?? 0;
             var processingEntities = EntityStreamingManager?.ProcessingEntities ?? 0;
             var deferredPhysics = VoxelPhysicsOptimizer?.DeferredPhysicsCount ?? 0;
-            var pendingValidations = EntityValidationQueue?.PendingValidations ?? 0;
 
             if (Config.Debug)
             {
                 MyLog.Default.WriteLine($"[{Name}] Queued: {queuedEntities}, Processing: {processingEntities}, " +
-                                      $"Deferred Physics: {deferredPhysics}, Validations: {pendingValidations}");
+                                      $"Deferred Physics: {deferredPhysics}");
             }
         }
 

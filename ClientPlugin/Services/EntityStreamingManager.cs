@@ -5,8 +5,6 @@ using System.Linq;
 using Sandbox.Engine.Multiplayer;
 using Sandbox.Game.Entities;
 using Sandbox.Game.World;
-using VRage.Game.Entity;
-using VRage.Game.ModAPI;
 using VRage.Network;
 using VRage.Utils;
 using VRageMath;

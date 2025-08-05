@@ -635,7 +635,6 @@
     <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\EntityStreamingManager.cs" />
-    <Compile Include="Services\EntityValidationQueue.cs" />
     <Compile Include="Services\VoxelPhysicsOptimizer.cs" />
     <Compile Include="Settings\ConfigStorage.cs" />
     <Compile Include="Settings\Elements\Button.cs" />

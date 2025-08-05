@@ -2,12 +2,8 @@ using System;
 using ClientPlugin.Services;
 using HarmonyLib;
 using Sandbox.Game.Entities;
-using Sandbox.Game.World;
 using VRage.Game.Voxels;
-using VRage.ObjectBuilders;
-using VRage.Voxels;
 using VRageMath;
-using Sandbox.Engine.Voxels.Planet;
 
 namespace ClientPlugin.Patches
 {

@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
-using VRage.Input;
 using VRageMath;
 
 namespace ClientPlugin
@@ -23,6 +22,7 @@ namespace ClientPlugin
         private int validationTimeoutMs = 2000;
         private int maxConcurrentValidations = 10;
         private bool deferVoxelPhysics = true;
+        private int voxelPhysicsDelayMs = 100;
         private bool enableDistancePriority = true;
         private float priorityDistanceThreshold = 5000f;
 
@@ -78,6 +78,13 @@ namespace ClientPlugin
         {
             get => deferVoxelPhysics;
             set => SetField(ref deferVoxelPhysics, value);
+        }
+
+        [Slider(100f, 2000f, 100f, SliderAttribute.SliderType.Integer, description: "Delay before creating voxel physics (milliseconds)")]
+        public int VoxelPhysicsDelayMs
+        {
+            get => voxelPhysicsDelayMs;
+            set => SetField(ref voxelPhysicsDelayMs, value);
         }
 
         [Checkbox(description: "Prioritize entities by distance to player")]
